@@ -7,6 +7,7 @@ import { cloneDeep, mergeWith } from 'lodash-es';
 import 'reflect-metadata';
 import { BehaviorSubject } from 'rxjs';
 import { Dictionary, ShortValidationErrors, DynamicFormGroupField } from '../models';
+import { DynamicFormControl } from './dynamic-form-control';
 
 export class DynamicFormGroup<TModel> extends FormGroup {
 
@@ -465,7 +466,8 @@ export function getClassValidators<TModel>(factoryModel: ClassType<TModel>, fiel
 
     const fieldDefinition: DynamicFormGroupField = {
       data: formGroupFields[fieldName],
-      validation: []
+      validationFunctions: [],
+      validationDefinitions: []
     };
 
     if (fieldDefinition.data === undefined) {
@@ -474,6 +476,12 @@ export function getClassValidators<TModel>(factoryModel: ClassType<TModel>, fiel
 
     validationGroupMetadatas.forEach(validationMetadata => {
       if (validationMetadata.propertyName === fieldName && validationMetadata.type !== ValidationKeys.conditional.type) {
+
+        // Add all validation to the field except the @NestedValidation definition as
+        // being part of the form would imply it is validated if any other rules are present
+        if (validationMetadata.type !== ValidationKeys.nested.type) {
+          fieldDefinition.validationDefinitions.push(validationMetadata);
+        }
 
         // tslint:disable-next-line:forin
         for (const typeKey in ValidationTypes) {
@@ -518,7 +526,7 @@ export function getClassValidators<TModel>(factoryModel: ClassType<TModel>, fiel
                 return getIsValidResult(isValid, validationMetadata);
               };
 
-              fieldDefinition.validation.push(nestedValidate);
+              fieldDefinition.validationFunctions.push(nestedValidate);
             }
 
             // Handle Custom Validation
@@ -533,7 +541,7 @@ export function getClassValidators<TModel>(factoryModel: ClassType<TModel>, fiel
                 return getIsValidResult(isValid, validationMetadata);
               };
 
-              fieldDefinition.validation.push(customValidation);
+              fieldDefinition.validationFunctions.push(customValidation);
 
               // Set field data
               if (fields[fieldName] instanceof DynamicFormGroup) {
@@ -567,7 +575,7 @@ export function getClassValidators<TModel>(factoryModel: ClassType<TModel>, fiel
                 return getIsValidResult(isValid, validationMetadata);
               };
 
-              fieldDefinition.validation.push(dynamicValidate);
+              fieldDefinition.validationFunctions.push(dynamicValidate);
 
               // Set field data
               if (fields[fieldName] instanceof DynamicFormGroup) {
@@ -577,7 +585,6 @@ export function getClassValidators<TModel>(factoryModel: ClassType<TModel>, fiel
               if (fieldDefinition.data === undefined) {
                 fieldDefinition.data = fields[fieldName];
               }
-
             }
           }
         }
@@ -589,7 +596,7 @@ export function getClassValidators<TModel>(factoryModel: ClassType<TModel>, fiel
       formGroupFields[fieldName] = fieldDefinition.data;
     }
     else {
-      formGroupFields[fieldName] = [fieldDefinition.data, fieldDefinition.validation];
+      formGroupFields[fieldName] = new DynamicFormControl(fieldDefinition);
     }
   });
 
